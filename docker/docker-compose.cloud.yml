@@ -1,0 +1,158 @@
+version: '3.8'
+
+# AeroSentry AI - Cloud Services Docker Compose
+# Deploy on central server for multi-sensor aggregation
+
+services:
+  # TimescaleDB for time-series data
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    hostname: timescaledb
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${DB_USER:-aerosentry}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-aerosentry}
+      - POSTGRES_DB=${DB_NAME:-aerosentry}
+    volumes:
+      - timescale-data:/var/lib/postgresql/data
+      - ../cloud/feature-store/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-aerosentry}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NATS JetStream for message streaming
+  nats:
+    image: nats:latest
+    hostname: nats
+    restart: unless-stopped
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"     # Client connections
+      - "8222:8222"     # Monitoring
+    volumes:
+      - nats-data:/data
+
+  # MinIO for object storage (IQ samples, recordings)
+  minio:
+    image: minio/minio:latest
+    hostname: minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_USER:-aerosentry}
+      - MINIO_ROOT_PASSWORD=${MINIO_PASSWORD:-aerosentry123}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "9000:9000"     # API
+      - "9001:9001"     # Console
+
+  # Ingest API
+  ingest-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    hostname: ingest-api
+    restart: unless-stopped
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-aerosentry}:${DB_PASSWORD:-aerosentry}@timescaledb:5432/${DB_NAME:-aerosentry}
+      - NATS_URL=nats://nats:4222
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=${MINIO_USER:-aerosentry}
+      - S3_SECRET_KEY=${MINIO_PASSWORD:-aerosentry123}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"     # REST API
+      - "50051:50051"   # gRPC
+
+  # Model Serving
+  model-serving:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.models
+    hostname: model-serving
+    restart: unless-stopped
+    environment:
+      - MODEL_PATH=/app/models
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ../models:/app/models:ro
+    ports:
+      - "8001:8001"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # LLM Copilot Service
+  llm-copilot:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.copilot
+    hostname: llm-copilot
+    restart: unless-stopped
+    depends_on:
+      - timescaledb
+      - ingest-api
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-aerosentry}:${DB_PASSWORD:-aerosentry}@timescaledb:5432/${DB_NAME:-aerosentry}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    ports:
+      - "8002:8002"
+
+  # Web UI
+  web-ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.webui
+    hostname: web-ui
+    restart: unless-stopped
+    depends_on:
+      - ingest-api
+    environment:
+      - API_URL=http://ingest-api:8000
+      - COPILOT_URL=http://llm-copilot:8002
+    ports:
+      - "3000:3000"
+
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:latest
+    hostname: grafana
+    restart: unless-stopped
+    depends_on:
+      - timescaledb
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=grafana-worldmap-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ../deploy/grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3001:3000"
+
+volumes:
+  timescale-data:
+  nats-data:
+  minio-data:
+  grafana-data:
+
+networks:
+  default:
+    name: aerosentry-cloud

@@ -1,0 +1,37 @@
+# AeroSentry AI - Ingest API Dockerfile
+FROM python:3.11-slim-bookworm
+
+LABEL maintainer="AeroSentry AI"
+LABEL description="Cloud ingest API for AeroSentry"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy requirements
+COPY requirements-cloud.txt .
+RUN pip install --no-cache-dir -r requirements-cloud.txt
+
+# Copy application code
+COPY cloud/ingest-api/ ./cloud/ingest-api/
+COPY cloud/feature-store/ ./cloud/feature-store/
+COPY shared/ ./shared/
+
+# Environment
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Expose ports
+EXPOSE 8000 50051
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+# Run API server
+CMD ["uvicorn", "cloud.ingest-api.main:app", "--host", "0.0.0.0", "--port", "8000"]

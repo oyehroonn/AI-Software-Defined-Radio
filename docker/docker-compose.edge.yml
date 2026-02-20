@@ -1,0 +1,104 @@
+version: '3.8'
+
+# AeroSentry AI - Edge Node Docker Compose
+# Deploy this on Raspberry Pi / edge compute devices
+
+services:
+  # Baseline ADS-B decoder using ultrafeeder
+  ultrafeeder:
+    image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder:latest
+    hostname: ${HOSTNAME:-aerosentry-edge}
+    restart: unless-stopped
+    device_cgroup_rules:
+      - 'c 189:* rwm'
+    ports:
+      - "8080:80"         # tar1090 Web UI
+      - "30003:30003"     # SBS output
+      - "30005:30005"     # Beast output
+    environment:
+      - TZ=${TZ:-UTC}
+      - READSB_DEVICE_TYPE=rtlsdr
+      - READSB_RTLSDR_DEVICE=${SDR_DEVICE:-0}
+      - READSB_GAIN=${SDR_GAIN:-autogain}
+      - READSB_LAT=${LATITUDE}
+      - READSB_LON=${LONGITUDE}
+      - READSB_ALT=${ALTITUDE:-0}
+      - ENABLE_TIMELAPSE1090=true
+      - TAR1090_ENABLE_AC_DB=true
+      - GRAPHS1090_DARKMODE=true
+    volumes:
+      - /opt/aerosentry/globe_history:/var/globe_history
+      - /opt/aerosentry/graphs:/var/lib/collectd
+      - /dev:/dev:ro
+    tmpfs:
+      - /run:exec,size=256M
+      - /tmp:size=128M
+      - /var/log:size=32M
+
+  # AeroSentry Edge Service
+  aerosentry-edge:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edge
+    hostname: aerosentry-processor
+    restart: unless-stopped
+    depends_on:
+      - ultrafeeder
+    environment:
+      - SENSOR_ID=${SENSOR_ID:-edge-001}
+      - SENSOR_LAT=${LATITUDE}
+      - SENSOR_LON=${LONGITUDE}
+      - SENSOR_ALT=${ALTITUDE:-0}
+      - BEAST_HOST=ultrafeeder
+      - BEAST_PORT=30005
+      - CLOUD_ENDPOINT=${CLOUD_ENDPOINT:-}
+      - API_KEY=${API_KEY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - /opt/aerosentry/data:/var/lib/aerosentry
+      - /opt/aerosentry/models:/app/models
+    ports:
+      - "8000:8000"       # Local API
+
+  # Optional: VHF Voice Capture (requires second SDR)
+  voice-capture:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.voice
+    hostname: aerosentry-voice
+    restart: unless-stopped
+    profiles:
+      - voice
+    device_cgroup_rules:
+      - 'c 189:* rwm'
+    environment:
+      - SENSOR_ID=${SENSOR_ID:-edge-001}
+      - VHF_FREQUENCIES=${VHF_FREQUENCIES:-121.5}
+      - SDR_DEVICE=${VHF_SDR_DEVICE:-1}
+    volumes:
+      - /opt/aerosentry/voice:/var/lib/aerosentry/voice
+      - /dev:/dev:ro
+
+  # Optional: Meshtastic Relay
+  mesh-relay:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.mesh
+    hostname: aerosentry-mesh
+    restart: unless-stopped
+    profiles:
+      - mesh
+    devices:
+      - ${MESHTASTIC_DEVICE:-/dev/ttyUSB0}:/dev/ttyUSB0
+    environment:
+      - SENSOR_ID=${SENSOR_ID:-edge-001}
+      - MESH_CHANNEL=${MESH_CHANNEL:-0}
+    volumes:
+      - /opt/aerosentry/data:/var/lib/aerosentry
+
+volumes:
+  aerosentry-data:
+
+networks:
+  default:
+    name: aerosentry-edge

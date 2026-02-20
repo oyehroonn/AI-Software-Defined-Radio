@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+package aerosentry;
+
+option python_package = "aerosentry.schemas";
+
+// Core ADS-B message from decoder
+message ADSBMessage {
+    string sensor_id = 1;
+    int64 timestamp_ns = 2;
+    string icao24 = 3;
+    int32 downlink_format = 4;
+    string raw_hex = 5;
+    
+    // Decoded fields (optional, depends on message type)
+    optional string callsign = 6;
+    optional double latitude = 7;
+    optional double longitude = 8;
+    optional int32 altitude = 9;
+    optional int32 velocity = 10;
+    optional float heading = 11;
+    optional int32 vertical_rate = 12;
+    optional string squawk = 13;
+    
+    // Decode metadata
+    optional float signal_level = 14;
+    optional bool crc_valid = 15;
+}
+
+// Batch of messages for efficient transport
+message ADSBMessageBatch {
+    repeated ADSBMessage messages = 1;
+    string sensor_id = 2;
+    int64 batch_timestamp_ns = 3;
+}
+
+// Track state aggregation
+message TrackState {
+    string icao24 = 1;
+    int64 last_update_ns = 2;
+    string callsign = 3;
+    double latitude = 4;
+    double longitude = 5;
+    int32 altitude = 6;
+    int32 velocity = 7;
+    float heading = 8;
+    int32 vertical_rate = 9;
+    string squawk = 10;
+    int32 message_count = 11;
+    int64 track_start_ns = 12;
+}
+
+// Anomaly alert structure
+message AnomalyAlert {
+    string alert_id = 1;
+    int64 timestamp_ns = 2;
+    string icao24 = 3;
+    string callsign = 4;
+    string sensor_id = 5;
+    string alert_type = 6;
+    AlertSeverity severity = 7;
+    float anomaly_score = 8;
+    repeated RuleTrigger rule_triggers = 9;
+    map<string, string> evidence = 10;
+    optional double latitude = 11;
+    optional double longitude = 12;
+}
+
+enum AlertSeverity {
+    ALERT_SEVERITY_UNSPECIFIED = 0;
+    ALERT_SEVERITY_LOW = 1;
+    ALERT_SEVERITY_MEDIUM = 2;
+    ALERT_SEVERITY_HIGH = 3;
+    ALERT_SEVERITY_CRITICAL = 4;
+}
+
+message RuleTrigger {
+    string rule_id = 1;
+    string severity = 2;
+    string description = 3;
+    map<string, string> evidence = 4;
+}
+
+// PHY-layer features for RF fingerprinting
+message PHYFeatures {
+    string icao24 = 1;
+    int64 timestamp_ns = 2;
+    string sensor_id = 3;
+    
+    // Carrier features
+    float cfo_mean = 4;
+    float cfo_std = 5;
+    float cfo_drift = 6;
+    
+    // Amplitude features
+    float amp_mean = 7;
+    float amp_std = 8;
+    float amp_skew = 9;
+    
+    // Preamble features
+    float preamble_rise_time = 10;
+    float preamble_overshoot = 11;
+    
+    // Phase features
+    float phase_std = 12;
+    float phase_jitter = 13;
+    
+    // Spectral features
+    float spectral_centroid = 14;
+    float spectral_spread = 15;
+}
+
+// Voice transcript
+message VoiceTranscript {
+    string transcript_id = 1;
+    int64 timestamp_ns = 2;
+    string sensor_id = 3;
+    float frequency_mhz = 4;
+    float duration_seconds = 5;
+    string text = 6;
+    float confidence = 7;
+    repeated string callsigns = 8;
+    repeated string runways = 9;
+    repeated int32 altitudes = 10;
+}

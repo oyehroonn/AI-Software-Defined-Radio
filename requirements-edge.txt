@@ -1,0 +1,32 @@
+# AeroSentry AI - Edge Node Requirements
+# Minimal requirements for Raspberry Pi / edge devices
+
+# Core
+numpy>=1.24.0
+pandas>=2.0.0
+
+# ADS-B Decoding
+pyModeS>=2.21
+
+# Machine Learning (lightweight)
+scikit-learn>=1.3.0
+joblib>=1.3.0
+
+# API (minimal)
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pydantic>=2.0.0
+httpx>=0.24.0
+
+# Local Storage
+aiosqlite>=0.19.0
+
+# Utilities
+python-dotenv>=1.0.0
+pyyaml>=6.0.0
+
+# Optional: Meshtastic
+meshtastic>=2.2.0
+
+# Optional: Voice (requires more RAM)
+# openai-whisper>=20230918

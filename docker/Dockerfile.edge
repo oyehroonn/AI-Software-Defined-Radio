@@ -1,0 +1,37 @@
+# AeroSentry AI - Edge Node Dockerfile
+FROM python:3.11-slim-bookworm
+
+LABEL maintainer="AeroSentry AI"
+LABEL description="Edge node for ADS-B processing and anomaly detection"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy requirements first for caching
+COPY requirements-edge.txt .
+RUN pip install --no-cache-dir -r requirements-edge.txt
+
+# Copy application code
+COPY edge/ ./edge/
+COPY shared/ ./shared/
+
+# Create data directories
+RUN mkdir -p /var/lib/aerosentry/data \
+    && mkdir -p /var/lib/aerosentry/models
+
+# Environment
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+# Run edge service
+CMD ["python", "-m", "edge.features.beast_ingest"]
