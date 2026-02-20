@@ -1,0 +1,42 @@
+# AeroSentry AI - LLM Copilot Dockerfile
+FROM python:3.11-slim-bookworm
+
+LABEL maintainer="AeroSentry AI"
+LABEL description="Evidence-gated LLM copilot service"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libffi-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy requirements
+COPY requirements-cloud.txt .
+RUN pip install --no-cache-dir -r requirements-cloud.txt
+
+# Install LLM dependencies
+RUN pip install --no-cache-dir \
+    openai>=1.0.0 \
+    anthropic>=0.5.0 \
+    langchain>=0.1.0 \
+    langchain-openai>=0.0.5
+
+# Copy application code
+COPY cloud/llm-copilot/ ./cloud/llm-copilot/
+COPY shared/ ./shared/
+
+# Environment
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Expose port
+EXPOSE 8002
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')" || exit 1
+
+CMD ["python", "-m", "cloud.llm_copilot.server"]

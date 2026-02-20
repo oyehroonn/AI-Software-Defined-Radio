@@ -1,0 +1,37 @@
+# AeroSentry AI - Web UI Dockerfile
+FROM python:3.11-slim-bookworm
+
+LABEL maintainer="AeroSentry AI"
+LABEL description="Web UI for aircraft tracking and alerts"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    fastapi>=0.100.0 \
+    uvicorn[standard]>=0.23.0 \
+    jinja2>=3.1.0 \
+    aiofiles>=23.0.0 \
+    httpx>=0.24.0 \
+    websockets>=11.0
+
+# Copy application code
+COPY cloud/web-ui/ ./cloud/web-ui/
+
+# Environment
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:3000/health')" || exit 1
+
+CMD ["uvicorn", "cloud.web-ui.server:app", "--host", "0.0.0.0", "--port", "3000"]

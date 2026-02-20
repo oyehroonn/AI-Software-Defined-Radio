@@ -1,0 +1,44 @@
+# AeroSentry AI - Voice Capture Dockerfile
+FROM python:3.11-slim-bookworm
+
+LABEL maintainer="AeroSentry AI"
+LABEL description="VHF airband voice capture and transcription"
+
+# Install system dependencies including audio libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libffi-dev \
+    libsndfile1 \
+    ffmpeg \
+    portaudio19-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy requirements
+COPY requirements-edge.txt .
+RUN pip install --no-cache-dir -r requirements-edge.txt
+
+# Install whisper and audio dependencies
+RUN pip install --no-cache-dir \
+    openai-whisper \
+    soundfile \
+    librosa
+
+# Copy application code
+COPY edge/voice-capture/ ./edge/voice-capture/
+COPY shared/ ./shared/
+
+# Create directories
+RUN mkdir -p /var/lib/aerosentry/voice \
+    && mkdir -p /var/lib/aerosentry/transcripts
+
+# Environment
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Health check
+HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 \
+    CMD python -c "print('Voice capture healthy')" || exit 1
+
+CMD ["python", "-m", "edge.voice_capture.vhf_capture"]

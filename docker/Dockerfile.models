@@ -1,0 +1,40 @@
+# AeroSentry AI - Model Serving Dockerfile
+FROM python:3.11-slim-bookworm
+
+LABEL maintainer="AeroSentry AI"
+LABEL description="ML model serving for anomaly detection"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy requirements
+COPY requirements-cloud.txt .
+RUN pip install --no-cache-dir -r requirements-cloud.txt
+
+# Copy application code
+COPY cloud/model-serving/ ./cloud/model-serving/
+COPY edge/edge-inference/ ./edge/edge-inference/
+COPY edge/features/ ./edge/features/
+COPY shared/ ./shared/
+
+# Create model directory
+RUN mkdir -p /app/models
+
+# Environment
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV MODEL_PATH=/app/models
+
+# Expose port
+EXPOSE 8001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')" || exit 1
+
+CMD ["python", "-m", "cloud.model_serving.server"]

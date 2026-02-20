@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: aerosentry
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - timescaledb.yaml
+  - nats.yaml
+  - ingest-api.yaml
+  - model-serving.yaml
+  - web-ui.yaml
+
+commonLabels:
+  app.kubernetes.io/name: aerosentry
+  app.kubernetes.io/version: "1.0.0"
+
+images:
+  - name: aerosentry/ingest-api
+    newTag: latest
+  - name: aerosentry/model-serving
+    newTag: latest
+  - name: aerosentry/web-ui
+    newTag: latest

@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-serving
+  namespace: aerosentry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-serving
+  template:
+    metadata:
+      labels:
+        app: model-serving
+    spec:
+      containers:
+        - name: model-serving
+          image: aerosentry/model-serving:latest
+          ports:
+            - containerPort: 8001
+          envFrom:
+            - configMapRef:
+                name: aerosentry-config
+            - secretRef:
+                name: aerosentry-secrets
+          env:
+            - name: MODEL_PATH
+              value: /app/models
+          volumeMounts:
+            - name: models
+              mountPath: /app/models
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "200m"
+            limits:
+              memory: "4Gi"
+              cpu: "2000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: models-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: models-pvc
+  namespace: aerosentry
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-serving
+  namespace: aerosentry
+spec:
+  selector:
+    app: model-serving
+  ports:
+    - port: 8001
+      targetPort: 8001
+  type: ClusterIP

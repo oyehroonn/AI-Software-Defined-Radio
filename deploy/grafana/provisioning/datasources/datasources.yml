@@ -1,0 +1,28 @@
+apiVersion: 1
+
+datasources:
+  - name: TimescaleDB
+    type: postgres
+    access: proxy
+    url: ${TIMESCALE_HOST:-timescaledb}:5432
+    database: ${TIMESCALE_DB:-aerosentry}
+    user: ${TIMESCALE_USER:-aerosentry}
+    secureJsonData:
+      password: ${TIMESCALE_PASSWORD:-aerosentry_secure}
+    jsonData:
+      sslmode: disable
+      maxOpenConns: 10
+      maxIdleConns: 5
+      connMaxLifetime: 14400
+      postgresVersion: 1400
+      timescaledb: true
+    isDefault: true
+
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://${PROMETHEUS_HOST:-prometheus}:9090
+    jsonData:
+      httpMethod: POST
+      manageAlerts: true
+      prometheusType: Prometheus

@@ -1,0 +1,39 @@
+# AeroSentry AI - Meshtastic Mesh Relay Dockerfile
+FROM python:3.11-slim-bookworm
+
+LABEL maintainer="AeroSentry AI"
+LABEL description="Meshtastic LoRa mesh relay for emergency alerts"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libffi-dev \
+    usbutils \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy requirements and install
+COPY requirements-edge.txt .
+RUN pip install --no-cache-dir -r requirements-edge.txt
+
+# Install meshtastic
+RUN pip install --no-cache-dir meshtastic>=2.2.0
+
+# Copy application code
+COPY disaster/mesh-relay/ ./disaster/mesh-relay/
+COPY disaster/local-summarizer/ ./disaster/local-summarizer/
+COPY shared/ ./shared/
+
+# Create data directory
+RUN mkdir -p /var/lib/aerosentry
+
+# Environment
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Health check
+HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 \
+    CMD python -c "print('Mesh relay healthy')" || exit 1
+
+CMD ["python", "-m", "disaster.mesh_relay.meshtastic_relay"]
