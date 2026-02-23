@@ -278,6 +278,35 @@ class BeastClient:
             except Exception as e:
                 logger.error(f"Error reading Beast stream: {e}")
                 await asyncio.sleep(1)
+                
+    async def stream(self) -> AsyncGenerator[dict, None]:
+        """Stream messages as dicts (common DataSource interface).
+        
+        This method implements the DataSourceProtocol interface, allowing
+        BeastClient to be used interchangeably with other data sources
+        like OpenSkyLiveClient.
+        
+        Yields:
+            dict: Aircraft state message with standard fields
+        """
+        if not self.reader:
+            await self.connect()
+            
+        async for msg in self.read_messages():
+            yield {
+                "timestamp": msg.timestamp.isoformat() if msg.timestamp else datetime.now(UTC).isoformat(),
+                "icao24": msg.icao24,
+                "callsign": msg.callsign,
+                "latitude": msg.latitude,
+                "longitude": msg.longitude,
+                "altitude": msg.altitude,
+                "velocity": msg.velocity,
+                "heading": msg.heading,
+                "vert_rate": msg.vertical_rate,
+                "squawk": msg.squawk,
+                "signal_level": msg.signal_level,
+                "source": "beast"
+            }
 
 
 async def main():

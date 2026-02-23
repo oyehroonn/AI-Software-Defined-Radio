@@ -6,6 +6,7 @@ import os
 import signal
 import sys
 from datetime import datetime, UTC
+from typing import Optional
 
 # Configure logging
 logging.basicConfig(
@@ -19,6 +20,14 @@ from edge.features.beast_ingest import BeastClient
 from edge.features.track_features import TrackManager
 from edge.edge_inference.rules import RuleEngine
 from edge.edge_inference.anomaly_model import EnsembleAnomalyDetector
+
+# Optional: OpenSky client
+try:
+    from edge.features.opensky_client import OpenSkyLiveClient, parse_bbox_string
+    OPENSKY_AVAILABLE = True
+except ImportError:
+    OPENSKY_AVAILABLE = False
+    logger.info("OpenSky client not available (install aiohttp to enable)")
 
 try:
     from edge.edge_store.parquet_manager import LocalDataStore
@@ -36,18 +45,36 @@ except ImportError:
 
 
 class EdgeNode:
-    """AeroSentry edge node main application."""
+    """AeroSentry edge node main application.
+    
+    Supports multiple data sources:
+        - beast: Local SDR via Beast TCP protocol (default)
+        - opensky: OpenSky Network REST API (requires free registration)
+    
+    Set DATA_SOURCE environment variable to select the source.
+    """
     
     def __init__(self):
         # Configuration
         self.sensor_id = os.getenv("SENSOR_ID", "edge-001")
-        self.beast_host = os.getenv("BEAST_HOST", "localhost")
-        self.beast_port = int(os.getenv("BEAST_PORT", "30005"))
         self.sensor_lat = float(os.getenv("SENSOR_LAT", "0"))
         self.sensor_lon = float(os.getenv("SENSOR_LON", "0"))
         
+        # Data source configuration
+        self.data_source_type = os.getenv("DATA_SOURCE", "beast").lower()
+        
+        # Beast configuration
+        self.beast_host = os.getenv("BEAST_HOST", "localhost")
+        self.beast_port = int(os.getenv("BEAST_PORT", "30005"))
+        
+        # OpenSky configuration (OAuth2)
+        self.opensky_client_id = os.getenv("OPENSKY_CLIENT_ID")
+        self.opensky_client_secret = os.getenv("OPENSKY_CLIENT_SECRET")
+        self.opensky_poll_interval = float(os.getenv("OPENSKY_POLL_INTERVAL", "10"))
+        self.opensky_bbox = parse_bbox_string(os.getenv("OPENSKY_BBOX", "")) if OPENSKY_AVAILABLE else None
+        
         # Components
-        self.beast_client = None
+        self.data_source = None  # Will be BeastClient or OpenSkyLiveClient
         self.track_manager = TrackManager()
         self.rule_engine = RuleEngine()
         self.ensemble_detector = EnsembleAnomalyDetector()
@@ -59,9 +86,39 @@ class EdgeNode:
         self.message_count = 0
         self.alert_count = 0
         
+    def _create_data_source(self):
+        """Create the appropriate data source based on configuration."""
+        if self.data_source_type == "opensky":
+            if not OPENSKY_AVAILABLE:
+                raise RuntimeError(
+                    "OpenSky data source requested but aiohttp is not installed. "
+                    "Install with: pip install aiohttp"
+                )
+            
+            logger.info("Using OpenSky Network as data source")
+            return OpenSkyLiveClient(
+                client_id=self.opensky_client_id,
+                client_secret=self.opensky_client_secret,
+                poll_interval=self.opensky_poll_interval,
+                bbox=self.opensky_bbox
+            )
+            
+        elif self.data_source_type == "beast":
+            logger.info(f"Using Beast TCP as data source ({self.beast_host}:{self.beast_port})")
+            return BeastClient(
+                host=self.beast_host,
+                port=self.beast_port,
+                receiver_lat=self.sensor_lat,
+                receiver_lon=self.sensor_lon
+            )
+            
+        else:
+            raise ValueError(f"Unknown data source type: {self.data_source_type}")
+        
     async def start(self):
         """Start edge node."""
         logger.info(f"Starting AeroSentry edge node: {self.sensor_id}")
+        logger.info(f"Data source: {self.data_source_type}")
         
         # Initialize local storage
         if STORAGE_AVAILABLE:
@@ -81,8 +138,8 @@ class EdgeNode:
             except Exception as e:
                 logger.warning(f"Failed to connect to NATS: {e}")
                 
-        # Connect to Beast source
-        self.beast_client = BeastClient(self.beast_host, self.beast_port)
+        # Create and connect data source
+        self.data_source = self._create_data_source()
         
         self.running = True
         
@@ -94,8 +151,8 @@ class EdgeNode:
         logger.info("Stopping edge node...")
         self.running = False
         
-        if self.beast_client:
-            await self.beast_client.disconnect()
+        if self.data_source:
+            await self.data_source.disconnect()
             
         if self.nats_client:
             await self.nats_client.disconnect()
@@ -108,7 +165,7 @@ class EdgeNode:
     async def _process_messages(self):
         """Main message processing loop."""
         try:
-            async for message in self.beast_client.stream():
+            async for message in self.data_source.stream():
                 if not self.running:
                     break
                     
@@ -116,10 +173,16 @@ class EdgeNode:
                 
         except Exception as e:
             logger.error(f"Message processing error: {e}")
+            import traceback
+            traceback.print_exc()
             
     async def _handle_message(self, message: dict):
         """Handle a single ADS-B message."""
         self.message_count += 1
+        
+        # Log progress periodically
+        if self.message_count % 100 == 0:
+            logger.info(f"Processed {self.message_count} messages, {self.alert_count} alerts")
         
         # Add sensor info
         message["sensor_id"] = self.sensor_id

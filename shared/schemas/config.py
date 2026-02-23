@@ -128,3 +128,68 @@ class MeshtasticConfig:
     serial_port: str = "/dev/ttyUSB0"
     channel: int = 0
     alert_prefix: str = "!SKY:"
+
+
+class DataSourceType(Enum):
+    """Supported data source types."""
+    BEAST = "beast"      # Local SDR via Beast TCP protocol
+    OPENSKY = "opensky"  # OpenSky Network REST API
+
+
+@dataclass
+class OpenSkyConfig:
+    """OpenSky Network API configuration.
+    
+    OpenSky provides free access to global ADS-B data via REST API.
+    Registration at https://opensky-network.org/ increases rate limits.
+    
+    Rate Limits:
+        - Anonymous: 10 requests per 10 seconds
+        - Authenticated (free): 40 requests per 10 seconds
+    """
+    enabled: bool = False
+    username: Optional[str] = None
+    password: Optional[str] = None
+    
+    # Polling configuration
+    poll_interval_seconds: float = 10.0
+    
+    # Bounding box to filter aircraft (reduces data volume)
+    bbox_lat_min: Optional[float] = None
+    bbox_lat_max: Optional[float] = None
+    bbox_lon_min: Optional[float] = None
+    bbox_lon_max: Optional[float] = None
+    
+    def get_bbox(self) -> Optional[tuple[float, float, float, float]]:
+        """Get bounding box as tuple if all values are set."""
+        if all([
+            self.bbox_lat_min is not None,
+            self.bbox_lat_max is not None,
+            self.bbox_lon_min is not None,
+            self.bbox_lon_max is not None
+        ]):
+            return (
+                self.bbox_lat_min,
+                self.bbox_lat_max,
+                self.bbox_lon_min,
+                self.bbox_lon_max
+            )
+        return None
+
+
+@dataclass
+class BeastConfig:
+    """Beast TCP data source configuration.
+    
+    For connecting to local SDR via readsb/dump1090 Beast protocol.
+    """
+    host: str = "localhost"
+    port: int = 30005
+
+
+@dataclass
+class DataSourceConfig:
+    """Combined data source configuration."""
+    source_type: DataSourceType = DataSourceType.BEAST
+    beast: BeastConfig = field(default_factory=BeastConfig)
+    opensky: OpenSkyConfig = field(default_factory=OpenSkyConfig)

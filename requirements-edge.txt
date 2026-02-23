@@ -18,6 +18,9 @@ uvicorn>=0.23.0
 pydantic>=2.0.0
 httpx>=0.24.0
 
+# HTTP Client (for OpenSky API)
+aiohttp>=3.9.0
+
 # Local Storage
 aiosqlite>=0.19.0
 

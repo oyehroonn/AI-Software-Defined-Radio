@@ -51,6 +51,9 @@ protobuf>=4.24.0
 grpcio>=1.57.0
 grpcio-tools>=1.57.0
 
+# HTTP Client (for OpenSky API)
+aiohttp>=3.9.0
+
 # Utilities
 python-dotenv>=1.0.0
 httpx>=0.24.0
