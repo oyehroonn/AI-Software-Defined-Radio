@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+:root {
+  --background: #050712;
+  --foreground: #e5e7eb;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: radial-gradient(circle at top, #0b1024 0, #050712 55%, #020309 100%);
+  color: var(--foreground);
+}
+
+.hud-glow-text {
+  text-shadow:
+    0 0 4px rgba(34, 211, 238, 0.7),
+    0 0 14px rgba(8, 47, 73, 0.9);
+}
