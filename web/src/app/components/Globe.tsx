@@ -12,11 +12,16 @@ export default function Globe({ radius }: GlobeProps) {
   const earthRef = useRef<Mesh>(null);
   const atmosphereRef = useRef<Mesh>(null);
 
-  const [earthMap, bumpMap, cloudsMap] = useLoader(TextureLoader, [
-    "/textures/earth-night.jpg",
-    "/textures/earth-bump.jpg",
-    "/textures/earth-clouds.png",
-  ]);
+  const [dayMap, bumpMap, lightsMap, specularMap, cloudsMap] = useLoader(
+    TextureLoader,
+    [
+      "/textures/earth_day_4096.jpg",
+      "/textures/earth-bump.jpg",
+      "/textures/earth_lights_2048.png",
+      "/textures/earth_specular_2048.jpg",
+      "/textures/earth_atmos_4096.jpg",
+    ],
+  );
 
   useFrame((_state, delta) => {
     if (earthRef.current) {
@@ -32,11 +37,27 @@ export default function Globe({ radius }: GlobeProps) {
       <mesh ref={earthRef}>
         <sphereGeometry args={[radius, 64, 64]} />
         <meshPhongMaterial
-          map={earthMap}
+          map={dayMap}
           bumpMap={bumpMap}
-          bumpScale={0.015}
-          specular="#2424ff"
-          shininess={20}
+          bumpScale={0.02}
+          specularMap={specularMap}
+          specular="#ffffff"
+          shininess={30}
+          emissive="#facc6b"
+          emissiveMap={lightsMap}
+          emissiveIntensity={0.85}
+        />
+      </mesh>
+
+      {/* Subtle glow from specular map along coasts/oceans */}
+      <mesh>
+        <sphereGeometry args={[radius * 1.001, 96, 96]} />
+        <meshBasicMaterial
+          map={specularMap}
+          color="#1e293b"
+          transparent
+          opacity={0.2}
+          depthWrite={false}
         />
       </mesh>
 
@@ -45,7 +66,7 @@ export default function Globe({ radius }: GlobeProps) {
         <meshPhongMaterial
           map={cloudsMap}
           transparent
-          opacity={0.25}
+          opacity={0.3}
           depthWrite={false}
         />
       </mesh>

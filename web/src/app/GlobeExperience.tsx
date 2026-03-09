@@ -8,6 +8,7 @@ import { Color } from "three";
 import Globe from "./components/Globe";
 import AircraftLayer, { AircraftState } from "./components/AircraftLayer";
 import InteractionLayer from "./components/InteractionLayer";
+import { CountryLabels } from "./components/CountryLabels";
 import { useAircraftData } from "./hooks/useAircraftData";
 
 const BG_COLOR = new Color("#050712");
@@ -70,14 +71,19 @@ export default function GlobeExperience() {
         <color attach="background" args={[BG_COLOR]} />
         <fog attach="fog" args={[BG_COLOR, 8, 25]} />
 
-        <ambientLight intensity={0.6} color="#444a66" />
-        <directionalLight position={[5, 3, 5]} intensity={1.6} color="#ffffff" />
-        <directionalLight position={[-4, -2, -5]} intensity={0.3} color="#223355" />
+        <ambientLight intensity={0.7} color="#1f2937" />
+        <hemisphereLight
+          skyColor="#3b82f6"
+          groundColor="#020617"
+          intensity={0.35}
+        />
+        <directionalLight position={[5, 3, 5]} intensity={1.7} color="#ffffff" />
 
         <Suspense fallback={null}>
           <Stars radius={50} depth={40} count={1200} factor={3} saturation={0} fade />
 
           <Globe radius={1} />
+          <CountryLabels radius={1} />
 
           <AircraftLayer
             globeRadius={1}
